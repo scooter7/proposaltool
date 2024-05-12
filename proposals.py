@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISSVectorStore  # Updated import
 from langchain.llms import OpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks import get_openai_callback
@@ -33,7 +33,7 @@ def f_scan_directory_for_ext(directory, extension):
     return [f for f in os.listdir(directory) if f.endswith(extension)]
 
 def f_create_embedding(new_file_trunk, new_file_pdf_path, file_persistent_dir_path):
-    """Create text embeddings for the given PDF and save them in the specified directory."""
+    """Create text embeddings for the given PDF and save them using FAISS."""
     print(f"Creating embedding for {file_persistent_dir_path}")
     pdf_reader = PdfReader(new_file_pdf_path)
     text = ""
@@ -45,9 +45,14 @@ def f_create_embedding(new_file_trunk, new_file_pdf_path, file_persistent_dir_pa
         length_function=len)
     chunks = text_splitter.split_text(text=text)
     new_chunks = [Document(page_content=chunk) for chunk in chunks]
-    db = Chroma.from_documents(
-        documents=new_chunks, embedding=embeddings, persist_directory=file_persistent_dir_path)
-    db.persist()
+    
+    # Use FAISS for vector storage
+    db = FAISSVectorStore(embedding_function=embeddings)
+    for doc in new_chunks:
+        db.add_documents([doc])
+    
+    # Persist the FAISS store to disk
+    db.save(file_persistent_dir_path + '/faiss_index')
 
 def main():
     """Main function to initialize the Streamlit app and process user interactions."""
@@ -91,21 +96,21 @@ def main():
             st.write(f"Selected: {pathname}")
 
     st.header("Chat with the PDFs of your choice")
-    DB_final = Chroma(embedding_function=embeddings)
     if l_db_pathes_to_load == ["No confirmed selection yet!"]:
         for pathname in l_db_pathes_to_load:
             st.write(pathname)
     elif len(l_db_pathes_to_load) == 0:
         st.write("At least 1 file must be selected")
     else:
+        DB_final = None
         for db_path in l_db_pathes_to_load:
-            DB_aux = Chroma(persist_directory=db_path, embedding_function=embeddings)
-            DB_aux_data = DB_aux._collection.get(include=['documents','metadatas','embeddings'])
-            DB_final._collection.add(
-                 embeddings=DB_aux_data['embeddings'],
-                 metadatas=DB_aux_data['metadatas'],
-                 documents=DB_aux_data['documents'],
-                 ids=DB_aux_data['ids'])
+            # Load the FAISS store from disk
+            DB_aux = FAISSVectorStore.load(db_path + '/faiss_index', embedding_function=embeddings)
+            if DB_final is None:
+                DB_final = DB_aux
+            else:
+                for doc_id, doc in DB_aux.iter_documents():
+                    DB_final.add_documents([doc])
 
     with st.form("query_input"):
         query = st.text_input("Step3: Ask questions about the selected PDF file (or enter EXIT to exit):")
@@ -116,15 +121,18 @@ def main():
     if query != "EXIT":
         if submit_button:
             st.write(f"Your query was: {query}")
-            retriever = DB_final.as_retriever(search_type="similarity", search_kwargs={"k": 4})
-            chain = ConversationalRetrievalChain.from_llm(llm, retriever, return_source_documents=True)
-            with get_openai_callback() as cb:
-                response = chain({'question': query, 'chat_history': st.session_state['chat_history']})
-                print(cb)
-            add_vertical_space(20)
-            st.write(f"The response: {response['answer']}")
-            chat_tuple = (query, response['answer'])
-            st.session_state['chat_history'].append(chat_tuple)
+            if DB_final is not None:
+                retriever = DB_final.as_retriever(search_type="similarity", search_kwargs={"k": 4})
+                chain = ConversationalRetrievalChain.from_llm(llm, retriever, return_source_documents=True)
+                with get_openai_callback() as cb:
+                    response = chain({'question': query, 'chat_history': st.session_state['chat_history']})
+                    print(cb)
+                add_vertical_space(20)
+                st.write(f"The response: {response['answer']}")
+                chat_tuple = (query, response['answer'])
+                st.session_state['chat_history'].append(chat_tuple)
+            else:
+                st.error("No documents are loaded into the vector store.")
     else:
         st.warning('You chose to exit the chat.')
         st.stop()

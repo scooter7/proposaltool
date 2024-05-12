@@ -41,7 +41,6 @@ def load_vector_store(file_path, embedding):
 politic_vector_store = load_vector_store(politic_vector_store_path, embedding)
 environmental_vector_store = load_vector_store(environmental_vector_store_path, embedding)
 
-# Define document formatting and combining functions
 DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
 
 def combine_documents(docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"):
@@ -75,15 +74,6 @@ class ConfigurableFaissRetriever(RunnableSerializable[str, List[Document]]):
         retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
         return retriever.invoke(input, config=config)
 
-# Define the fields for configurable retriever
-configurable_faiss_vector_store = ConfigurableFaissRetriever(vector_store_topic=informing_store_name).configurable_fields(
-    vector_store_topic=ConfigurableField(
-        id="vector_store_topic",
-        name="Vector Store Topic",
-        description="The topic of the FAISS vector store.",
-    )
-)
-
 # Main interaction: Generate a proposal
 st.header("Generate Proposal")
 st.write(f"Informing Store: {informing_store_name}, Target Store: {target_store_name}")
@@ -93,37 +83,36 @@ user_query = st.text_area("Enter your requirements or query here:")
 
 if st.button("Generate Proposal"):
     if user_query:
-        # Retrieve context from the informing vector store
+        # Retrieve context from the Informing vector store (Politic)
         informing_retriever = ConfigurableFaissRetriever(vector_store_topic=informing_store_name)
         retrieved_docs_informing = informing_retriever.invoke(user_query)
         context_from_informing_store = combine_documents(retrieved_docs_informing)
 
-        # Retrieve context from the target vector store
+        # Retrieve requirements from the Target vector store (Environmental)
         target_retriever = ConfigurableFaissRetriever(vector_store_topic=target_store_name)
         retrieved_docs_target = target_retriever.invoke(user_query)
-        context_from_target_store = combine_documents(retrieved_docs_target)
+        requirements_from_target_store = combine_documents(retrieved_docs_target)
 
         # Display context information
-        st.subheader("Context from Informing Store")
+        st.subheader("Context from Informing Store (Politic)")
         st.write(context_from_informing_store)
 
-        st.subheader("Requirements from Target Store")
-        st.write(context_from_target_store)
+        st.subheader("Requirements from Target Store (Environmental)")
+        st.write(requirements_from_target_store)
 
         # Prepare a prompt to generate a proposal
         response_prompt = (
-            f"Using the context from the {informing_store_name} vector store, craft a proposal to address these requirements:\n\n"
-            f"{user_query}\n\n"
-            f"Context:\n{context_from_informing_store}\n\n"
-            f"Requirements Context:\n{context_from_target_store}"
+            f"Context from {informing_store_name} Store:\n{context_from_informing_store}\n\n"
+            f"Use this context to craft a proposal addressing these requirements from the {target_store_name} Store:\n"
+            f"{requirements_from_target_store}"
         )
 
         # Generate the proposal using the model
-        response = model.invoke(prompt=response_prompt, max_tokens=500)
+        response = model.invoke(input={"prompt": response_prompt, "max_tokens": 500})
 
         # Display the proposal
         st.subheader("Crafted Proposal")
-        st.write(response)
+        st.write(response['choices'][0]['message']['content'])
     else:
         st.warning("Please enter some requirements to generate a proposal.")
 
@@ -181,8 +170,8 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(environmental_vec
         interaction_context = combine_documents(interaction_docs)
 
         chat_response_prompt = f"Context: {interaction_context}\nAnswer this question:\n{query}"
-        chat_response = model.invoke(prompt=chat_response_prompt, max_tokens=150)
+        chat_response = model.invoke(input={"prompt": chat_response_prompt, "max_tokens": 150})
 
-        st.session_state.message.append({"role": "assistant", "content": chat_response})
+        st.session_state.message.append({"role": "assistant", "content": chat_response['choices'][0]['message']['content']})
         with st.chat_message("assistant"):
-            st.markdown(chat_response)
+            st.markdown(chat_response['choices'][0]['message']['content'])

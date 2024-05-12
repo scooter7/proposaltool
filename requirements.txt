@@ -1,10 +1,8 @@
-PyPDF2
-os-sys
-streamlit
-python-dotenv
-streamlit-extras
-langchain
 openai
+PyPDF2
+streamlit
+streamlit-extras
+numpy
 faiss-cpu
-langchain-community
 langchain-openai
+langchain-community

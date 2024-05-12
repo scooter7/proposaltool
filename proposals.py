@@ -31,34 +31,27 @@ embedding = OpenAIEmbeddings(openai_api_key=st.secrets["openai"]["api_key"])
 politic_vector_store_path = "politic_vector_store_path.faiss"
 environmental_vector_store_path = "environmental_vector_store_path.faiss"
 
+# Function to load vector stores
+def load_vector_store(file_path, embedding):
+    if os.path.exists(file_path):
+        return FAISS.load_local(file_path, embedding, allow_dangerous_deserialization=True)
+    return None
+
 # Load vector stores if they exist
-if os.path.exists(politic_vector_store_path):
-    politic_vector_store = FAISS.load_local(politic_vector_store_path, embedding, allow_dangerous_deserialization=True)
-else:
-    politic_vector_store = None
+politic_vector_store = load_vector_store(politic_vector_store_path, embedding)
+environmental_vector_store = load_vector_store(environmental_vector_store_path, embedding)
 
-if os.path.exists(environmental_vector_store_path):
-    environmental_vector_store = FAISS.load_local(environmental_vector_store_path, embedding, allow_dangerous_deserialization=True)
-else:
-    environmental_vector_store = None
-
-# Define document formatting and combining functions
-DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
-
+# Document combining function
 def combine_documents(docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"):
-    """Combine documents into a single string."""
     return document_separator.join([format_document(doc, document_prompt) for doc in docs])
 
-# Function to format chat history
-def format_chat_history(chat_history: dict) -> str:
-    """Format chat history into a string."""
-    buffer = ""
-    for dialogue_turn in chat_history:
-        actor = "Human" if dialogue_turn["role"] == "user" else "Assistant"
-        buffer += f"{actor}: {dialogue_turn['content']}\n"
-    return buffer
+DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
 
-# User interaction to determine the role of vector stores
+# Format chat history
+def format_chat_history(chat_history: dict) -> str:
+    return "\n".join(f"{actor}: {dialogue_turn['content']}" for actor, dialogue_turn in chat_history.items())
+
+# Sidebar configuration for vector store roles
 st.sidebar.header("Vector Store Settings")
 informing_store_name = st.sidebar.selectbox(
     "Select the Informing Vector Store:",
@@ -72,11 +65,11 @@ class ConfigurableFaissRetriever(RunnableSerializable[str, List[Document]]):
     vector_store_topic: str
 
     def invoke(self, input: str, config: Optional[RunnableConfig] = None) -> List[Document]:
-        vector_store_path = politic_vector_store_path if self.vector_store_topic == "Politic" else environmental_vector_store_path
         vector_store = politic_vector_store if self.vector_store_topic == "Politic" else environmental_vector_store
         retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
         return retriever.invoke(input, config=config)
 
+# Define the fields for configurable retriever
 configurable_faiss_vector_store = ConfigurableFaissRetriever(vector_store_topic=informing_store_name).configurable_fields(
     vector_store_topic=ConfigurableField(
         id="vector_store_topic",
@@ -85,7 +78,7 @@ configurable_faiss_vector_store = ConfigurableFaissRetriever(vector_store_topic=
     )
 )
 
-# Main application logic
+# Main interaction: Generate a proposal
 st.header("Generate Proposal")
 st.write(f"Informing Store: {informing_store_name}, Target Store: {target_store_name}")
 
@@ -96,20 +89,31 @@ if st.button("Generate Proposal"):
     if user_query:
         # Retrieve context from the informing vector store
         informing_retriever = ConfigurableFaissRetriever(vector_store_topic=informing_store_name)
-        retrieved_docs = informing_retriever.invoke(user_query)
-        context_from_informing_store = combine_documents(retrieved_docs)
+        retrieved_docs_informing = informing_retriever.invoke(user_query)
+        context_from_informing_store = combine_documents(retrieved_docs_informing)
+
+        # Retrieve context from the target vector store
+        target_retriever = ConfigurableFaissRetriever(vector_store_topic=target_store_name)
+        retrieved_docs_target = target_retriever.invoke(user_query)
+        context_from_target_store = combine_documents(retrieved_docs_target)
 
         # Display context information
         st.subheader("Context from Informing Store")
         st.write(context_from_informing_store)
 
-        # Generate a response based on this context
-        response_prompt = f"Using the context from the {informing_store_name} vector store, " \
-                          f"craft a proposal to address these requirements:\n\n{user_query}\n\n" \
-                          f"Context:\n{context_from_informing_store}"
+        st.subheader("Requirements from Target Store")
+        st.write(context_from_target_store)
 
-        # Invoke the OpenAI model
-        response = model.invoke({"prompt": response_prompt, "max_tokens": 500})
+        # Prepare a prompt to generate a proposal
+        response_prompt = (
+            f"Using the context from the {informing_store_name} vector store, craft a proposal to address these requirements:\n\n"
+            f"{user_query}\n\n"
+            f"Context:\n{context_from_informing_store}\n\n"
+            f"Requirements Context:\n{context_from_target_store}"
+        )
+
+        # Generate the proposal using the model
+        response = model.invoke(prompt=response_prompt, max_tokens=500)
 
         # Display the proposal
         st.subheader("Crafted Proposal")
@@ -165,14 +169,13 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(environmental_vec
     if query := st.chat_input("Ask me anything"):
         st.session_state.message.append({"role": "user", "content": query})
 
-        # Use the target vector store to respond based on the chat
-        target_retriever = ConfigurableFaissRetriever(vector_store_topic=target_store_name)
-        target_docs = target_retriever.invoke(query)
-        combined_context = combine_documents(target_docs)
+        # Context and response generation based on interaction
+        interaction_retriever = ConfigurableFaissRetriever(vector_store_topic=vector_store_topic)
+        interaction_docs = interaction_retriever.invoke(query)
+        interaction_context = combine_documents(interaction_docs)
 
-        # Generate the response using the combined context
-        chat_response_prompt = f"Context: {combined_context}\nAnswer this question:\n{query}"
-        chat_response = model.invoke({"prompt": chat_response_prompt, "max_tokens": 150})
+        chat_response_prompt = f"Context: {interaction_context}\nAnswer this question:\n{query}"
+        chat_response = model.invoke(prompt=chat_response_prompt, max_tokens=150)
 
         st.session_state.message.append({"role": "assistant", "content": chat_response})
         with st.chat_message("assistant"):

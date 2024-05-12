@@ -6,3 +6,5 @@ streamlit-extras
 langchain
 openai
 faiss-cpu
+langchain-community
+langchain-openai

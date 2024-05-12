@@ -1,160 +1,216 @@
 import os
-import numpy as np
-import faiss
-from PyPDF2 import PdfReader
+from typing import List, Optional
+from operator import itemgetter
+
 import streamlit as st
-from streamlit_extras.add_vertical_space import add_vertical_space
-from langchain_openai import OpenAI, OpenAIEmbeddings  # Ensure these are from langchain_openai
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai.chains import ConversationalRetrievalChain  # Assuming chains are part of langchain_openai now
-from langchain_openai.callbacks import get_openai_callback  # Updated for langchain_openai
-from langchain.schema import Document  # Adjust if this also has a new path
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import ConfigurableField, RunnablePassthrough
+from langchain.schema import format_document, Document
+from langchain.schema.runnable import (
+    ConfigurableField,
+    RunnableConfig,
+    RunnableSerializable,
+    RunnableMap,
+)
+from langchain_community.vectorstores import FAISS
+from langchain_core.output_parsers import StrOutputParser
+import fitz  # PyMuPDF
 
-##########################################################################
-## DEFINE VARIABLES
-# Directories and file extensions
-SUB_EXT = 'rfps'  # Directory where PDFs are stored
-SUB_EMB = 'SUB_EMB'
-EXT = '.pdf'
-EMB_EXT = '.pkl'
 
-# Initialize OpenAI LLM and embeddings using Streamlit secrets:
-openai_api_key = st.secrets["OPENAI_API_KEY"]
-if openai_api_key:
-    llm = OpenAI(api_key=openai_api_key)
-    embeddings = OpenAIEmbeddings(api_key=openai_api_key)
-else:
-    st.error("OpenAI API key is not set. Please set the OPENAI_API_KEY in your Streamlit secrets.")
+st.title("Hello, Metadocs readers!")
 
-##########################################################################
-## DEFINE FUNCTIONS
+# Base templates for vector store prompts
+template_single_line = PromptTemplate.from_template(
+    """Answer the question in a single line based on the following context.
+    If there is not relevant information in the context, just say that you do not know:
+{context}
 
-def f_scan_directory_for_ext(directory, extension):
-    """Scan the specified directory for files ending with the given extension."""
-    return [f for f in os.listdir(directory) if f.endswith(extension)]
+Question: {question}
+"""
+)
 
-def f_create_embedding(new_file_trunk, new_file_pdf_path, file_persistent_dir_path):
-    """Create text embeddings for the given PDF and save them using FAISS."""
-    print(f"Creating embedding for {file_persistent_dir_path}")
-    pdf_reader = PdfReader(new_file_pdf_path)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text() or ""  # Handle None return from extract_text
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len)
-    chunks = text_splitter.split_text(text=text)
-    
-    # Convert chunks into embeddings
-    embeddings_list = [embeddings.embed_text(chunk) for chunk in chunks]  # Updated method name
-    embeddings_matrix = np.vstack(embeddings_list)
-    
-    # Use FAISS for vector storage
-    dim = embeddings_matrix.shape[1]
-    index = faiss.IndexFlatL2(dim)
-    index.add(embeddings_matrix)
-    
-    # Persist the FAISS index to disk
-    faiss.write_index(index, os.path.join(file_persistent_dir_path, 'faiss_index'))
+template_detailed = PromptTemplate.from_template(
+    """Answer the question in a detailed way with an idea per bullet point based on the following context.
+    If there is not relevant information in the context, just say that you do not know:
+{context}
 
-def main():
-    """Main function to initialize the Streamlit app and process user interactions."""
-    st.title('PDF Chatbot App')
+Question: {question}
+"""
+)
 
-    # Ensure the SUB_EXT directory exists to prevent os.listdir errors
-    if not os.path.exists(SUB_EXT):
-        os.makedirs(SUB_EXT)
-        st.warning(f"The directory {SUB_EXT} was created as it did not exist.")
-    
-    # Dynamically list all PDFs in the specified directory
-    files_in_directory = f_scan_directory_for_ext(SUB_EXT, EXT)
+prompt_alternatives = {
+    "detailed": template_detailed,
+}
 
-    # Create a Streamlit sidebar with checkboxes to select PDFs
-    with st.sidebar:
-        st.title('Step1: Select PDFs')
-        st.markdown('''
-        This app is an LLM-powered chatbot allowing
-        you to load one to all PDFs located in a 
-        dedicated sub-directory into a vector store
-        so that you can have Q&A-sessions with the
-        combined selected content.
-        ''')
-        add_vertical_space(20)
+configurable_prompt = template_single_line.configurable_alternatives(
+    which=ConfigurableField(
+        id="output_type",
+        name="Output type",
+        description="The type for the output, single line or detailed.",
+    ),
+    default_key="single_line",
+    **prompt_alternatives,
+)
 
-        selected_files = []
-        for file in files_in_directory:
-            if st.sidebar.checkbox(file, key=file):
-                selected_files.append(file)
+model = ChatOpenAI(
+    temperature=0,
+    model_name="gpt-3.5-turbo-0125",
+    openai_api_key=st.secrets["openai"]["api_key"],  # Use Streamlit secrets
+)
+embedding = OpenAIEmbeddings(openai_api_key=st.secrets["openai"]["api_key"])  # Use Streamlit secrets
 
-    # Display selected files or perform actions based on selection
-    st.write('Selected Files (Result of Step1):')
-    for file in selected_files:
-        st.write(file)
+politic_vector_store_path = "politic_vector_store_path.faiss"
+environnetal_vector_store_path = "environnetal_vector_store_path.faiss"
 
-    l_db_pathes_to_load = ["No confirmed selection yet!"]
-    if st.button('Step2: Proceed to chat with selected files'):
-        st.session_state['selected_files'] = selected_files
-        l_db_pathes_to_load = [os.path.join(SUB_EMB, filename[:-len(EXT)]) for filename in st.session_state['selected_files']]
-        for pathname in l_db_pathes_to_load:
-            st.write(f"Selected: {pathname}")
 
-    st.header("Chat with the PDFs of your choice")
-    DB_final = None
-    if l_db_pathes_to_load == ["No confirmed selection yet!"]:
-        for pathname in l_db_pathes_to_load:
-            st.write(pathname)
-    elif len(l_db_pathes_to_load) == 0:
-        st.write("At least 1 file must be selected")
-    else:
-        all_embeddings = []
-        all_ids = []
-        for db_path in l_db_pathes_to_load:
-            # Load the FAISS index from disk
-            index_path = os.path.join(db_path, 'faiss_index')
-            if os.path.exists(index_path):
-                index = faiss.read_index(index_path)
-                # Mock Document: For demonstration, associate embeddings with their vector ids
-                for i in range(index.ntotal):
-                    all_embeddings.append(index.reconstruct(i))
-                    all_ids.append(f"{db_path}_{i}")
-        
-        # Combine all embeddings into one large FAISS index for searching
-        if all_embeddings:
-            dim = all_embeddings[0].shape[0]
-            DB_final = faiss.IndexFlatL2(dim)
-            DB_final.add(np.array(all_embeddings))
+class ConfigurableFaissRetriever(RunnableSerializable[str, List[Document]]):
+    vector_store_topic: str
 
-    with st.form("query_input"):
-        query = st.text_input("Step3: Ask questions about the selected PDF file (or enter EXIT to exit):")
-        submit_button = st.form_submit_button("Submit Query")
+    def invoke(
+        self, input: str, config: Optional[RunnableConfig] = None
+    ) -> List[Document]:
+        """Invoke the retriever."""
 
-    if 'chat_history' not in st.session_state:
-        st.session_state['chat_history'] = []
-    if query != "EXIT":
-        if submit_button and DB_final:
-            st.write(f"Your query was: {query}")
-            query_vector = embeddings.embed_text([query])[0]  # Ensure this is the right method for embeddings
-            D, I = DB_final.search(np.array([query_vector]), k=4)
-            
-            # Fetch and display answers - For demonstration, just show distances and ids
-            st.write("Closest segments to your query based on the selected PDFs:")
-            for i, idx in enumerate(I[0]):
-                st.write(f"Doc {all_ids[idx]} with distance {D[0][i]}")
-            
-            chat_tuple = (query, [all_ids[idx] for idx in I[0]])
-            st.session_state['chat_history'].append(chat_tuple)
-            add_vertical_space(20)
-    else:
-        st.warning('You chose to exit the chat.')
-        st.stop()
+        vector_store_path = (
+            politic_vector_store_path
+            if "Politic" in self.vector_store_topic
+            else environnetal_vector_store_path
+        )
+        faiss_vector_store = FAISS.load_local(
+            vector_store_path,
+            embedding,
+            allow_dangerous_deserialization=True,
+        )
+        retriever = faiss_vector_store.as_retriever(
+            search_type="similarity", search_kwargs={"k": 4}
+        )
+        return retriever.invoke(input, config=config)
 
-    if 'chat_history' in st.session_state:
-        p_chat_history = [entry for entry in st.session_state['chat_history']]
-        for entry in p_chat_history:
-            print('--------------')
-            print(entry)
 
-# Process new files and create embeddings
-if __name__ == '__main__':
-    main()
+configurable_faiss_vector_store = ConfigurableFaissRetriever(
+    vector_store_topic="default"
+).configurable_fields(
+    vector_store_topic=ConfigurableField(
+        id="vector_store_topic",
+        name="Vector store topic",
+        description="The topic of the faiss vector store.",
+    )
+)
+
+DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
+
+
+def combine_documents(
+    docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"
+):
+    """Combine documents into a single string."""
+    doc_strings = [format_document(doc, document_prompt) for doc in docs]
+    return document_separator.join(doc_strings)
+
+
+CONDENSE_QUESTION_PROMPT = PromptTemplate.from_template(
+    """Given the following conversation and a follow up question, rephrase the 
+follow up question to be a standalone question, in its original language.
+
+Chat History:
+{chat_history}
+Follow Up Input: {question}
+Standalone question:"""
+)
+
+
+def format_chat_history(chat_history: dict) -> str:
+    """Format chat history into a string."""
+    buffer = ""
+    for dialogue_turn in chat_history:
+        actor = "Human" if dialogue_turn["role"] == "user" else "Assistant"
+        buffer += f"{actor}: {dialogue_turn['content']}\n"
+    return buffer
+
+
+vector_store_topic = None
+output_type = None
+
+inputs = RunnableMap(
+    standalone_question=RunnablePassthrough.assign(
+        chat_history=lambda x: format_chat_history(x["chat_history"])
+    )
+    | CONDENSE_QUESTION_PROMPT
+    | model
+    | StrOutputParser(),
+)
+
+context = {
+    "context": itemgetter("standalone_question")
+    | configurable_faiss_vector_store
+    | combine_documents,
+    "question": itemgetter("standalone_question"),
+}
+chain = inputs | context | configurable_prompt | model | StrOutputParser()
+
+with st.expander("Upload Files to Vector Stores"):
+    # Adjust file uploader to accept PDF files
+    politic_index_uploaded_file = st.file_uploader(
+        "Upload a PDF file to Politic vector store:", type="pdf", key="politic_index"
+    )
+    if politic_index_uploaded_file is not None:
+        with fitz.open(stream=politic_index_uploaded_file.read(), filetype="pdf") as doc:
+            string_data = "\n\n".join(page.get_text() for page in doc)
+        splitted_data = string_data.split("\n\n")
+        politic_vectorstore = FAISS.from_texts(splitted_data, embedding=embedding)
+        politic_vectorstore.save_local(politic_vector_store_path)
+        st.success("Politic vector store loaded successfully!")
+
+    environnetal_index_uploaded_file = st.file_uploader(
+        "Upload a PDF file to the Environnemental vector store:",
+        type="pdf",
+        key="environnetal_index",
+    )
+    if environnetal_index_uploaded_file is not None:
+        with fitz.open(stream=environnetal_index_uploaded_file.read(), filetype="pdf") as doc:
+            string_data = "\n\n".join(page.get_text() for page in doc)
+        splitted_data = string_data.split("\n\n")
+        environnetal_vectorstore = FAISS.from_texts(splitted_data, embedding=embedding)
+        environnetal_vectorstore.save_local(environnetal_vector_store_path)
+        st.success("Environnemental vector store loaded successfully!")
+
+
+st.header("Chat with your vector stores")
+if os.path.exists(politic_vector_store_path) or os.path.exists(
+    environnetal_vector_store_path
+):
+    vector_store_topic = st.selectbox(
+        "Choose the vector store configuration:",
+        ["Politic", "Environnemental"],
+    )
+    output_type = st.selectbox(
+        "Select the type of response:", ["detailed", "single_line"]
+    )
+
+    if "message" not in st.session_state:
+        st.session_state["message"] = [
+            {"role": "assistant", "content": "Hello 👋, How can I assist you ?"}
+        ]
+
+    chat_history = []
+
+    for message in st.session_state.message:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    if query := st.chat_input("Ask me anything"):
+        st.session_state.message.append({"role": "user", "content": query})
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        response = chain.with_config(
+            configurable={
+                "vector_store_topic": vector_store_topic,
+                "output_type": output_type,
+            }
+        ).invoke({"question": query, "chat_history": st.session_state.message})
+
+        st.session_state.message.append({"role": "assistant", "content": response})
+        with st.chat_message("assistant"):
+            st.markdown(response)

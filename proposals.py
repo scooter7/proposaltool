@@ -41,15 +41,21 @@ def load_vector_store(file_path, embedding):
 politic_vector_store = load_vector_store(politic_vector_store_path, embedding)
 environmental_vector_store = load_vector_store(environmental_vector_store_path, embedding)
 
-# Document combining function
-def combine_documents(docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"):
-    return document_separator.join([format_document(doc, document_prompt) for doc in docs])
-
+# Define document formatting and combining functions
 DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
 
-# Format chat history
+def combine_documents(docs, document_prompt=DEFAULT_DOCUMENT_PROMPT, document_separator="\n\n"):
+    """Combine documents into a single string."""
+    return document_separator.join([format_document(doc, document_prompt) for doc in docs])
+
+# Function to format chat history
 def format_chat_history(chat_history: dict) -> str:
-    return "\n".join(f"{actor}: {dialogue_turn['content']}" for actor, dialogue_turn in chat_history.items())
+    """Format chat history into a string."""
+    buffer = ""
+    for dialogue_turn in chat_history:
+        actor = "Human" if dialogue_turn["role"] == "user" else "Assistant"
+        buffer += f"{actor}: {dialogue_turn['content']}\n"
+    return buffer
 
 # Sidebar configuration for vector store roles
 st.sidebar.header("Vector Store Settings")

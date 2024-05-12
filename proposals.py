@@ -194,7 +194,8 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(
 
     chat_history = []
 
-    for message in st.session_session.message:
+    # Corrected from st.session_session.message to st.session_state.message
+    for message in st.session_state.message:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
@@ -213,3 +214,4 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(
         st.session_state.message.append({"role": "assistant", "content": response})
         with st.chat_message("assistant"):
             st.markdown(response)
+

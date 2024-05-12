@@ -28,8 +28,8 @@ model = ChatOpenAI(
 embedding = OpenAIEmbeddings(openai_api_key=st.secrets["openai"]["api_key"])
 
 # Define paths for vector stores
-politic_vector_store_path = "politic_vector_store_path.faiss"
-environmental_vector_store_path = "environmental_vector_store_path.faiss"
+Source_vector_store_path = "Source_vector_store_path.faiss"
+Target_vector_store_path = "Target_vector_store_path.faiss"
 
 # Function to load vector stores
 def load_vector_store(file_path, embedding):
@@ -38,8 +38,8 @@ def load_vector_store(file_path, embedding):
     return None
 
 # Load vector stores if they exist
-politic_vector_store = load_vector_store(politic_vector_store_path, embedding)
-environmental_vector_store = load_vector_store(environmental_vector_store_path, embedding)
+Source_vector_store = load_vector_store(Source_vector_store_path, embedding)
+Target_vector_store = load_vector_store(Target_vector_store_path, embedding)
 
 DEFAULT_DOCUMENT_PROMPT = PromptTemplate.from_template(template="{page_content}")
 
@@ -60,17 +60,17 @@ def format_chat_history(chat_history: dict) -> str:
 st.sidebar.header("Vector Store Settings")
 informing_store_name = st.sidebar.selectbox(
     "Select the Informing Vector Store:",
-    ["Politic", "Environmental"],
+    ["Source", "Target"],
     index=0
 )
-target_store_name = "Environmental" if informing_store_name == "Politic" else "Politic"
+target_store_name = "Target" if informing_store_name == "Source" else "Source"
 
 # Setup to retrieve information from vector stores based on user queries
 class ConfigurableFaissRetriever(RunnableSerializable[str, List[Document]]):
     vector_store_topic: str
 
     def invoke(self, input: str, config: Optional[RunnableConfig] = None) -> List[Document]:
-        vector_store = politic_vector_store if self.vector_store_topic == "Politic" else environmental_vector_store
+        vector_store = Source_vector_store if self.vector_store_topic == "Source" else Target_vector_store
         retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 5})
         return retriever.invoke(input, config=config)
 
@@ -83,21 +83,21 @@ user_query = st.text_area("Enter your requirements or query here:")
 
 if st.button("Generate Proposal"):
     if user_query:
-        # Retrieve context from the Informing vector store (Politic)
+        # Retrieve context from the Informing vector store (Source)
         informing_retriever = ConfigurableFaissRetriever(vector_store_topic=informing_store_name)
         retrieved_docs_informing = informing_retriever.invoke(user_query)
         context_from_informing_store = combine_documents(retrieved_docs_informing)
 
-        # Retrieve requirements from the Target vector store (Environmental)
+        # Retrieve requirements from the Target vector store (Target)
         target_retriever = ConfigurableFaissRetriever(vector_store_topic=target_store_name)
         retrieved_docs_target = target_retriever.invoke(user_query)
         requirements_from_target_store = combine_documents(retrieved_docs_target)
 
         # Display context information
-        st.subheader("Context from Informing Store (Politic)")
+        st.subheader("Context from Informing Store (Source)")
         st.write(context_from_informing_store)
 
-        st.subheader("Requirements from Target Store (Environmental)")
+        st.subheader("Requirements from Target Store (Target)")
         st.write(requirements_from_target_store)
 
         # Prepare a prompt to generate a proposal
@@ -118,34 +118,34 @@ if st.button("Generate Proposal"):
 
 # File uploaders for updating vector stores
 with st.expander("Update Vector Stores"):
-    politic_index_uploaded_file = st.file_uploader(
-        "Upload a PDF file to update the Politic vector store:", type="pdf", key="politic_index"
+    Source_index_uploaded_file = st.file_uploader(
+        "Upload a PDF file to update the Source vector store:", type="pdf", key="Source_index"
     )
-    if politic_index_uploaded_file is not None:
-        pdf_reader = PdfReader(politic_index_uploaded_file)
+    if Source_index_uploaded_file is not None:
+        pdf_reader = PdfReader(Source_index_uploaded_file)
         text_data = "\n\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
         split_data = text_data.split("\n\n")
-        politic_vector_store = FAISS.from_texts(split_data, embedding=embedding)
-        politic_vector_store.save_local(politic_vector_store_path)
-        st.success("Politic vector store updated successfully!")
+        Source_vector_store = FAISS.from_texts(split_data, embedding=embedding)
+        Source_vector_store.save_local(Source_vector_store_path)
+        st.success("Source vector store updated successfully!")
 
-    environmental_index_uploaded_file = st.file_uploader(
-        "Upload a PDF file to update the Environmental vector store:", type="pdf", key="environmental_index"
+    Target_index_uploaded_file = st.file_uploader(
+        "Upload a PDF file to update the Target vector store:", type="pdf", key="Target_index"
     )
-    if environmental_index_uploaded_file is not None:
-        pdf_reader = PdfReader(environmental_index_uploaded_file)
+    if Target_index_uploaded_file is not None:
+        pdf_reader = PdfReader(Target_index_uploaded_file)
         text_data = "\n\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
         split_data = text_data.split("\n\n")
-        environmental_vector_store = FAISS.from_texts(split_data, embedding=embedding)
-        environmental_vector_store.save_local(environmental_vector_store_path)
-        st.success("Environmental vector store updated successfully!")
+        Target_vector_store = FAISS.from_texts(split_data, embedding=embedding)
+        Target_vector_store.save_local(Target_vector_store_path)
+        st.success("Target vector store updated successfully!")
 
 # Chat history and message interaction
 st.header("Chat with Vector Stores")
-if os.path.exists(politic_vector_store_path) or os.path.exists(environmental_vector_store_path):
+if os.path.exists(Source_vector_store_path) or os.path.exists(Target_vector_store_path):
     vector_store_topic = st.selectbox(
         "Choose Vector Store for Interaction:",
-        options=["Politic", "Environmental"],
+        options=["Source", "Target"],
         index=0
     )
     output_type = st.selectbox(

@@ -15,7 +15,7 @@ from langchain.schema.runnable import (
 )
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
-import fitz  # PyMuPDF
+import PyMuPDF
 
 
 st.title("Hello, Metadocs readers!")

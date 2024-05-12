@@ -1,0 +1,6 @@
+PyPDF2
+os-sys
+streamlit
+python-dotenv
+streamlit-extras
+langchain

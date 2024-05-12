@@ -5,7 +5,7 @@ from PyPDF2 import PdfReader
 import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 from langchain_openai import OpenAI, OpenAIEmbeddings  # Ensure these are from langchain_openai
-from langchain_openai.text_splitting import RecursiveCharacterTextSplitter  # Updated based on typical relocations
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai.chains import ConversationalRetrievalChain  # Assuming chains are part of langchain_openai now
 from langchain_openai.callbacks import get_openai_callback  # Updated for langchain_openai
 from langchain.schema import Document  # Adjust if this also has a new path

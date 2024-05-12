@@ -15,8 +15,7 @@ from langchain.schema.runnable import (
 )
 from langchain_community.vectorstores import FAISS
 from langchain_core.output_parsers import StrOutputParser
-import PyMuPDF
-
+from PyPDF2 import PdfReader  # Using PyPDF2 to read PDFs
 
 st.title("Hello, Metadocs readers!")
 
@@ -155,8 +154,8 @@ with st.expander("Upload Files to Vector Stores"):
         "Upload a PDF file to Politic vector store:", type="pdf", key="politic_index"
     )
     if politic_index_uploaded_file is not None:
-        with fitz.open(stream=politic_index_uploaded_file.read(), filetype="pdf") as doc:
-            string_data = "\n\n".join(page.get_text() for page in doc)
+        pdf_reader = PdfReader(politic_index_uploaded_file)
+        string_data = "\n\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
         splitted_data = string_data.split("\n\n")
         politic_vectorstore = FAISS.from_texts(splitted_data, embedding=embedding)
         politic_vectorstore.save_local(politic_vector_store_path)
@@ -168,8 +167,8 @@ with st.expander("Upload Files to Vector Stores"):
         key="environnetal_index",
     )
     if environnetal_index_uploaded_file is not None:
-        with fitz.open(stream=environnetal_index_uploaded_file.read(), filetype="pdf") as doc:
-            string_data = "\n\n".join(page.get_text() for page in doc)
+        pdf_reader = PdfReader(environnetal_index_uploaded_file)
+        string_data = "\n\n".join(page.extract_text() for page in pdf_reader.pages if page.extract_text())
         splitted_data = string_data.split("\n\n")
         environnetal_vectorstore = FAISS.from_texts(splitted_data, embedding=embedding)
         environnetal_vectorstore.save_local(environnetal_vector_store_path)
@@ -195,7 +194,7 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(
 
     chat_history = []
 
-    for message in st.session_state.message:
+    for message in st.session_session.message:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 

@@ -108,11 +108,14 @@ if st.button("Generate Proposal"):
         )
 
         # Correct the invoke method usage
-        response = model.invoke(input={"prompt": response_prompt, "max_tokens": 500})
+        try:
+            response = model.invoke(prompt=response_prompt, max_tokens=500)
+            # Display the proposal
+            st.subheader("Crafted Proposal")
+            st.write(response['choices'][0]['message']['content'])
+        except Exception as e:
+            st.error(f"Error in generating response: {e}")
 
-        # Display the proposal
-        st.subheader("Crafted Proposal")
-        st.write(response)
     else:
         st.warning("Please enter some requirements to generate a proposal.")
 
@@ -129,7 +132,7 @@ with st.expander("Update Vector Stores"):
         Source_vector_store.save_local(Source_vector_store_path)
         st.success("Source vector store updated successfully!")
 
-    Target_index_uploaded_file = st.file_uploader(
+    Target_index_uploaded_file = st.file_updater(
         "Upload a PDF file to update the Target vector store:", type="pdf", key="Target_index"
     )
     if Target_index_uploaded_file is not None:
@@ -170,8 +173,10 @@ if os.path.exists(Source_vector_store_path) or os.path.exists(Target_vector_stor
         interaction_context = combine_documents(interaction_docs)
 
         chat_response_prompt = f"Context: {interaction_context}\nAnswer this question:\n{query}"
-        chat_response = model.invoke(input={"prompt": chat_response_prompt, "max_tokens": 150})
-
-        st.session_state.message.append({"role": "assistant", "content": chat_response})
-        with st.chat_message("assistant"):
-            st.markdown(chat_response)
+        try:
+            chat_response = model.invoke(prompt=chat_response_prompt, max_tokens=150)
+            st.session_state.message.append({"role": "assistant", "content": chat_response['choices'][0]['message']['content']})
+            with st.chat_message("assistant"):
+                st.markdown(chat_response['choices'][0]['message']['content'])
+        except Exception as e:
+            st.error(f"Error in generating chat response: {e}")

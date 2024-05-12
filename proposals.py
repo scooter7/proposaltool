@@ -38,7 +38,7 @@ def f_create_embedding(new_file_trunk, new_file_pdf_path, file_persistent_dir_pa
     pdf_reader = PdfReader(new_file_pdf_path)
     text = ""
     for page in pdf_reader.pages:
-        text += page.extract_text()
+        text += page.extract_text() or ""  # Handle None return from extract_text
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
@@ -53,6 +53,14 @@ def main():
     """Main function to initialize the Streamlit app and process user interactions."""
     st.title('PDF Chatbot App')
 
+    # Ensure the SUB_EXT directory exists to prevent os.listdir errors
+    if not os.path.exists(SUB_EXT):
+        os.makedirs(SUB_EXT)
+        st.warning(f"The directory {SUB_EXT} was created as it did not exist.")
+    
+    # Dynamically list all PDFs in the specified directory
+    files_in_directory = f_scan_directory_for_ext(SUB_EXT, EXT)
+
     # Create a Streamlit sidebar with checkboxes to select PDFs
     with st.sidebar:
         st.title('Step1: Select PDFs')
@@ -63,10 +71,8 @@ def main():
         so that you can have Q&A-sessions with the
         combined selected content.
         ''')
-        add_vertical_space(0)
+        add_vertical_space(20)  # Adjust vertical space as needed
 
-        # Dynamically list all PDFs in the specified directory
-        files_in_directory = f_scan_directory_for_ext(SUB_EXT, EXT)
         selected_files = []
         for file in files_in_directory:
             if st.sidebar.checkbox(file, key=file):
@@ -115,9 +121,8 @@ def main():
             with get_openai_callback() as cb:
                 response = chain({'question': query, 'chat_history': st.session_state['chat_history']})
                 print(cb)
-            add_vertical_space(1)
+            add_vertical_space(20)
             st.write(f"The response: {response['answer']}")
-            add_vertical_space(1)
             chat_tuple = (query, response['answer'])
             st.session_state['chat_history'].append(chat_tuple)
     else:
@@ -131,13 +136,5 @@ def main():
             print(entry)
 
 # Process new files and create embeddings
-SUB_EMB_dir = os.path.join(SUB_EMB)
-for new_file in files_in_directory:
-    new_file_trunk = new_file[:-len(EXT)]
-    subdir_path = os.path.join(SUB_EMB_dir, new_file_trunk)
-    if not os.path.exists(subdir_path):
-        os.makedirs(subdir_path)
-    f_create_embedding(new_file_trunk, os.path.join(SUB_EXT, new_file), os.path.join(SUB_EMB, new_file_trunk))
-
 if __name__ == '__main__':
     main()

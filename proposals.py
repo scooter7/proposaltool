@@ -1,7 +1,6 @@
 from PyPDF2 import PdfReader
 import os
 import streamlit as st
-from dotenv import load_dotenv
 from streamlit_extras.add_vertical_space import add_vertical_space
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -11,25 +10,24 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks import get_openai_callback
 from langchain.schema import Document
 
-
 ##########################################################################
 ## DEFINE VARIABLES
 # Change these to match your specific directory and file extension
-SUB_EXT = 'SUB_PDF'
+SUB_EXT = 'rfps'
 SUB_EMB = 'SUB_EMB'
 EXT = '.pdf'
 EMB_EXT = '.pkl'
 FILE_LIST = 'file_name_list.txt'
+
 #_________________________________________
-# Initialize openAI llm and embeddings:
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
+# Initialize openAI llm and embeddings using Streamlit secrets:
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 if openai_api_key:
     llm = OpenAI(openai_api_key=openai_api_key)
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     # Use llm in your Streamlit app
 else:
-    st.error("OpenAI API key is not set. Please set the OPENAI_API_KEY environment variable.")
+    st.error("OpenAI API key is not set. Please set the OPENAI_API_KEY in your Streamlit secrets.")
 ##########################################################################
 ## DEFINE FUNCTIONS
 
@@ -88,18 +86,18 @@ def main():
     for file in selected_files:
         st.write(file)
 
-    l_db_pathes_to_load =["No confirmed selection yet!"]
+    l_db_pathes_to_load = ["No confirmed selection yet!"]
     # Button to signal the end of the selection process
     if st.button('Step2: Proceed to chat with selected files'):
         st.session_state['selected_files'] = selected_files
-        l_db_pathes_to_load = [os.path.join(SUB_EMB, filename[:-len(EXT)] ) for filename in st.session_state['selected_files']]
+        l_db_pathes_to_load = [os.path.join(SUB_EMB, filename[:-len(EXT)]) for filename in st.session_state['selected_files']]
         for pathname in l_db_pathes_to_load:
             st.write(f"Selected: {pathname}")
 
     st.header("Chat with the PDFs of your choice")
     # Create a new, empty Chroma object to receive input based on the previous document selection
     DB_final = Chroma(embedding_function=embeddings)
-    #loop to load all chorma embedding databases of selected files from disk to vector store
+    # loop to load all Chroma embedding databases of selected files from disk to vector store
     if l_db_pathes_to_load == ["No confirmed selection yet!"]:
         for pathname in l_db_pathes_to_load:
             st.write(pathname)
@@ -172,7 +170,7 @@ for name in new_files_trunk:
         os.makedirs(subdir_path)
 for new_file in new_files:
     new_file_trunk = new_file[:-len(EXT)]
-    #f_create_embedding(new_file_trunk, os.path.join(SUB_EXT, new_file), os.path.join(os.getcwd(), SUB_EMB, new_file_trunk))
+    # f_create_embedding(new_file_trunk, os.path.join(SUB_EXT, new_file), os.path.join(os.getcwd(), SUB_EMB, new_file_trunk))
     f_create_embedding(new_file_trunk, os.path.join(SUB_EXT, new_file), os.path.join(SUB_EMB, new_file_trunk))
 f_update_file_list(FILE_LIST, new_files)
 

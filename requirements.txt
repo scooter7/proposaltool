@@ -1,7 +1,6 @@
 streamlit
 langchain-openai
 langchain
-fitz
-PyMuPDF
+PyPDF2
 numpy
 faiss-cpu

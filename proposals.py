@@ -107,8 +107,8 @@ if st.button("Generate Proposal"):
             f"{requirements_from_target_store}"
         )
 
-        # Generate the proposal using the model
-        response = model.invoke(prompt=response_prompt, max_tokens=500)
+        # Correct the invoke method usage
+        response = model.invoke(input={"prompt": response_prompt, "max_tokens": 500})
 
         # Display the proposal
         st.subheader("Crafted Proposal")
@@ -170,7 +170,7 @@ if os.path.exists(Source_vector_store_path) or os.path.exists(Target_vector_stor
         interaction_context = combine_documents(interaction_docs)
 
         chat_response_prompt = f"Context: {interaction_context}\nAnswer this question:\n{query}"
-        chat_response = model.invoke(prompt=chat_response_prompt, max_tokens=150)
+        chat_response = model.invoke(input={"prompt": chat_response_prompt, "max_tokens": 150})
 
         st.session_state.message.append({"role": "assistant", "content": chat_response})
         with st.chat_message("assistant"):

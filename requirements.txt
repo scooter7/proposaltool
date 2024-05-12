@@ -4,3 +4,4 @@ streamlit
 python-dotenv
 streamlit-extras
 langchain
+openai

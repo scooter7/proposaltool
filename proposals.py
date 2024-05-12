@@ -1,10 +1,11 @@
-from PyPDF2 import PdfReader
 import os
+import faiss
+import numpy as np
+from PyPDF2 import PdfReader
 import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISSVectorStore  # Updated import
 from langchain.llms import OpenAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.callbacks import get_openai_callback
@@ -44,15 +45,18 @@ def f_create_embedding(new_file_trunk, new_file_pdf_path, file_persistent_dir_pa
         chunk_overlap=200,
         length_function=len)
     chunks = text_splitter.split_text(text=text)
-    new_chunks = [Document(page_content=chunk) for chunk in chunks]
+    
+    # Convert chunks into embeddings
+    embeddings_list = [embeddings.embed(chunk) for chunk in chunks]
+    embeddings_matrix = np.array(embeddings_list)
     
     # Use FAISS for vector storage
-    db = FAISSVectorStore(embedding_function=embeddings)
-    for doc in new_chunks:
-        db.add_documents([doc])
+    dim = embeddings_matrix.shape[1]
+    index = faiss.IndexFlatL2(dim)
+    index.add(embeddings_matrix)
     
-    # Persist the FAISS store to disk
-    db.save(file_persistent_dir_path + '/faiss_index')
+    # Persist the FAISS index to disk
+    faiss.write_index(index, os.path.join(file_persistent_dir_path, 'faiss_index'))
 
 def main():
     """Main function to initialize the Streamlit app and process user interactions."""
@@ -76,7 +80,7 @@ def main():
         so that you can have Q&A-sessions with the
         combined selected content.
         ''')
-        add_vertical_space(20)  # Adjust vertical space as needed
+        add_vertical_space(20)
 
         selected_files = []
         for file in files_in_directory:
@@ -96,21 +100,30 @@ def main():
             st.write(f"Selected: {pathname}")
 
     st.header("Chat with the PDFs of your choice")
+    DB_final = None
     if l_db_pathes_to_load == ["No confirmed selection yet!"]:
         for pathname in l_db_pathes_to_load:
             st.write(pathname)
     elif len(l_db_pathes_to_load) == 0:
         st.write("At least 1 file must be selected")
     else:
-        DB_final = None
+        all_embeddings = []
+        all_ids = []
         for db_path in l_db_pathes_to_load:
-            # Load the FAISS store from disk
-            DB_aux = FAISSVectorStore.load(db_path + '/faiss_index', embedding_function=embeddings)
-            if DB_final is None:
-                DB_final = DB_aux
-            else:
-                for doc_id, doc in DB_aux.iter_documents():
-                    DB_final.add_documents([doc])
+            # Load the FAISS index from disk
+            index_path = os.path.join(db_path, 'faiss_index')
+            if os.path.exists(index_path):
+                index = faiss.read_index(index_path)
+                # Mock Document: For demonstration, associate embeddings with their vector ids
+                for i in range(index.ntotal):
+                    all_embeddings.append(index.reconstruct(i))
+                    all_ids.append(f"{db_path}_{i}")
+        
+        # Combine all embeddings into one large FAISS index for searching
+        if all_embeddings:
+            dim = all_embeddings[0].shape[0]
+            DB_final = faiss.IndexFlatL2(dim)
+            DB_final.add(np.array(all_embeddings))
 
     with st.form("query_input"):
         query = st.text_input("Step3: Ask questions about the selected PDF file (or enter EXIT to exit):")
@@ -119,20 +132,19 @@ def main():
     if 'chat_history' not in st.session_state:
         st.session_state['chat_history'] = []
     if query != "EXIT":
-        if submit_button:
+        if submit_button and DB_final:
             st.write(f"Your query was: {query}")
-            if DB_final is not None:
-                retriever = DB_final.as_retriever(search_type="similarity", search_kwargs={"k": 4})
-                chain = ConversationalRetrievalChain.from_llm(llm, retriever, return_source_documents=True)
-                with get_openai_callback() as cb:
-                    response = chain({'question': query, 'chat_history': st.session_state['chat_history']})
-                    print(cb)
-                add_vertical_space(20)
-                st.write(f"The response: {response['answer']}")
-                chat_tuple = (query, response['answer'])
-                st.session_state['chat_history'].append(chat_tuple)
-            else:
-                st.error("No documents are loaded into the vector store.")
+            query_vector = embeddings.embed([query])[0]
+            D, I = DB_final.search(np.array([query_vector]), k=4)
+            
+            # Fetch and display answers - For demonstration, just show distances and ids
+            st.write("Closest segments to your query based on the selected PDFs:")
+            for i, idx in enumerate(I[0]):
+                st.write(f"Doc {all_ids[idx]} with distance {D[0][i]}")
+            
+            chat_tuple = (query, [all_ids[idx] for idx in I[0]])
+            st.session_state['chat_history'].append(chat_tuple)
+            add_vertical_space(20)
     else:
         st.warning('You chose to exit the chat.')
         st.stop()

@@ -4,11 +4,11 @@ import faiss
 from PyPDF2 import PdfReader
 import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
-from langchain_community.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAI, OpenAIEmbeddings  # Updated imports
-from langchain_community.chains import ConversationalRetrievalChain
-from langchain_community.callbacks import get_openai_callback
-from langchain_community.schema import Document
+from langchain_openai import OpenAI, OpenAIEmbeddings  # Ensure these are from langchain_openai
+from langchain_openai.text_splitting import RecursiveCharacterTextSplitter  # Updated based on typical relocations
+from langchain_openai.chains import ConversationalRetrievalChain  # Assuming chains are part of langchain_openai now
+from langchain_openai.callbacks import get_openai_callback  # Updated for langchain_openai
+from langchain.schema import Document  # Adjust if this also has a new path
 
 ##########################################################################
 ## DEFINE VARIABLES
@@ -21,10 +21,11 @@ EMB_EXT = '.pkl'
 # Initialize OpenAI LLM and embeddings using Streamlit secrets:
 openai_api_key = st.secrets["OPENAI_API_KEY"]
 if openai_api_key:
-    llm = OpenAI(api_key=openai_api_key)  # Adjusted for new import
-    embeddings = OpenAIEmbeddings(api_key=openai_api_key)  # Adjusted for new import
+    llm = OpenAI(api_key=openai_api_key)
+    embeddings = OpenAIEmbeddings(api_key=openai_api_key)
 else:
     st.error("OpenAI API key is not set. Please set the OPENAI_API_KEY in your Streamlit secrets.")
+
 ##########################################################################
 ## DEFINE FUNCTIONS
 
@@ -133,7 +134,7 @@ def main():
     if query != "EXIT":
         if submit_button and DB_final:
             st.write(f"Your query was: {query}")
-            query_vector = embeddings.embed_text(query)  # Updated method name
+            query_vector = embeddings.embed_text([query])[0]  # Ensure this is the right method for embeddings
             D, I = DB_final.search(np.array([query_vector]), k=4)
             
             # Fetch and display answers - For demonstration, just show distances and ids

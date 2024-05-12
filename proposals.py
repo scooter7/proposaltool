@@ -132,7 +132,7 @@ with st.expander("Update Vector Stores"):
         Source_vector_store.save_local(Source_vector_store_path)
         st.success("Source vector store updated successfully!")
 
-    Target_index_uploaded_file = st.file_updater(
+    Target_index_uploaded_file = st.file_uploader(
         "Upload a PDF file to update the Target vector store:", type="pdf", key="Target_index"
     )
     if Target_index_uploaded_file is not None:

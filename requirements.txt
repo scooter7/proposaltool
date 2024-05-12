@@ -1,9 +1,9 @@
-openai
-PyPDF2
 streamlit
-streamlit-extras
+langchain-openai
+langchain-core
+langchain-schema
+langchain-community
+fitz
+PyMuPDF
 numpy
 faiss-cpu
-langchain-openai
-langchain-community
-langchain

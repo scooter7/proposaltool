@@ -108,11 +108,11 @@ if st.button("Generate Proposal"):
         )
 
         # Generate the proposal using the model
-        response = model.invoke(input={"prompt": response_prompt, "max_tokens": 500})
+        response = model.invoke(prompt=response_prompt, max_tokens=500)
 
         # Display the proposal
         st.subheader("Crafted Proposal")
-        st.write(response['choices'][0]['message']['content'])
+        st.write(response)
     else:
         st.warning("Please enter some requirements to generate a proposal.")
 
@@ -170,8 +170,8 @@ if os.path.exists(politic_vector_store_path) or os.path.exists(environmental_vec
         interaction_context = combine_documents(interaction_docs)
 
         chat_response_prompt = f"Context: {interaction_context}\nAnswer this question:\n{query}"
-        chat_response = model.invoke(input={"prompt": chat_response_prompt, "max_tokens": 150})
+        chat_response = model.invoke(prompt=chat_response_prompt, max_tokens=150)
 
-        st.session_state.message.append({"role": "assistant", "content": chat_response['choices'][0]['message']['content']})
+        st.session_state.message.append({"role": "assistant", "content": chat_response})
         with st.chat_message("assistant"):
-            st.markdown(chat_response['choices'][0]['message']['content'])
+            st.markdown(chat_response)

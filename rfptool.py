@@ -77,12 +77,13 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        response = chat_model.complete(
+        # Using `generate` method to get the completion text
+        response = chat_model.generate(
             prompt=f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}",
             max_tokens=1024
         )
         st.write("Generated Proposal:")
-        st.write(response['choices'][0]['text'])
+        st.write(response[0]['text'])  # Adjusting how the response is accessed based on typical structure
 
 if __name__ == "__main__":
     main()

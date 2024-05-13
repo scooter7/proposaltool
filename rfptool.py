@@ -5,7 +5,7 @@ import requests
 from PyPDF2 import PdfFileReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain_community.chat_models import ChatOpenAI  # Updated import
+from langchain_community.chat_models import ChatOpenAI  # Corrected import based on deprecation warning
 
 # Initialize the LangChain OpenAI Chat model with the API key from Streamlit secrets
 chat_model = ChatOpenAI(
@@ -32,7 +32,8 @@ class VectorStore:
         return self.documents[most_similar_idx]
 
 def read_pdf(file):
-    reader = PdfFileReader(io.BytesIO(file.getvalue()))
+    """Read pages from a PDF file and return them as a list of strings."""
+    reader = PdfFileReader(file)
     text = [reader.getPage(i).extract_text() for i in range(reader.numPages)]
     return text
 

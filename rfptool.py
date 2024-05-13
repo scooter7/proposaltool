@@ -5,9 +5,9 @@ import requests
 from PyPDF2 import PdfFileReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI  # Updated import
 
-# Initialize the LangChain OpenAI Chat model
+# Initialize the LangChain OpenAI Chat model with the API key from Streamlit secrets
 chat_model = ChatOpenAI(
     temperature=0,
     model_name="gpt-3.5-turbo-0125",
@@ -40,12 +40,13 @@ def download_github_files(base_url, local_dir='./rfps/'):
     if not os.path.exists(local_dir):
         os.makedirs(local_dir)
     response = requests.get(base_url)
-    files = [file['download_url'] for file in response.json() if file['name'].endswith('.pdf')]
-    for file_url in files:
-        file_name = file_url.split("/")[-1]
-        pdf_response = requests.get(file_url)
-        with open(os.path.join(local_dir, file_name), 'wb') as f:
-            f.write(pdf_response.content)
+    if response.status_code == 200:
+        files = response.json()
+        for file in files:
+            if 'download_url' in file and file['name'].endswith('.pdf'):
+                pdf_response = requests.get(file['download_url'])
+                with open(os.path.join(local_dir, file['name']), 'wb') as f:
+                    f.write(pdf_response.content)
 
 def main():
     st.title("RAG Proposal Tool with LangChain")

@@ -5,7 +5,7 @@ import requests
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain_community.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI, BaseMessage
 
 # Initialize the LangChain OpenAI Chat model with the API key from Streamlit secrets
 chat_model = ChatOpenAI(
@@ -77,33 +77,24 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        # Try using invoke method properly
-        try:
-            # Construct input for invoke method
-            conversation = {
-                "model": "gpt-3.5-turbo-0125",  # Ensure this matches your model configuration
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
-                ]
-            }
+        messages = [
+            BaseMessage(role="system", content="You are a helpful assistant."),
+            BaseMessage(role="user", content=f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}")
+        ]
 
-            # Adjusted to use `invoke` method
+        try:
+            # Using `invoke` with structured messages
             response = chat_model.invoke(
-                input=conversation,  # Passing the structured input to invoke
+                input={"messages": messages},  # Pass structured input to invoke
                 max_tokens=1024
             )
-            
-            # Accessing the result text based on typical structure
-            if 'choices' in response and response['choices']:
-                st.write("Generated Proposal:")
-                st.write(response['choices'][0]['text'])
-            else:
-                st.write("Generated Proposal:")
-                st.write(response['text'])
 
-        except AttributeError as e:
-            st.error(f"Failed with AttributeError: {str(e)}")
+            st.write("Generated Proposal:")
+            if isinstance(response, dict) and 'text' in response:
+                st.write(response['text'])
+            else:
+                st.write("Check the structure of the response.")
+        
         except Exception as e:
             st.error(f"An unexpected error occurred: {str(e)}")
 

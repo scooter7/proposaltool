@@ -34,7 +34,7 @@ class VectorStore:
 def read_pdf(file):
     """Read pages from a PDF file and return them as a list of strings."""
     reader = PdfReader(file)
-    text = [reader.getPage(i).extract_text() for i in range(len(reader.pages))]
+    text = [page.extract_text() for page in reader.pages]
     return text
 
 def download_github_files(base_url, local_dir='./rfps/'):

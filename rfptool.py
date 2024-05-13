@@ -5,7 +5,7 @@ import requests
 from PyPDF2 import PdfFileReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain.openai import ChatOpenAI
+from langchain.openai import ChatOpenAIfrom langchain.chat_models import ChatOpenAI
 
 # Initialize the LangChain OpenAI Chat model
 chat_model = ChatOpenAI(

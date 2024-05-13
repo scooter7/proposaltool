@@ -77,19 +77,30 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        # Correct the input to the generate function
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
         ]
 
-        response = chat_model.generate(
-            messages=messages,  # Correctly pass the messages
-            max_tokens=1024
-        )
+        # Adjusted to use `invoke` method if `generate` isn't appropriate
+        try:
+            response = chat_model.invoke(
+                messages=messages,
+                max_tokens=1024
+            )
+        except AttributeError:
+            # Fall back to generate if invoke isn't available
+            response = chat_model.generate(
+                messages=messages,
+                max_tokens=1024
+            )
 
         st.write("Generated Proposal:")
-        st.write(response['choices'][0]['text'])
+        # Adjust how you access text based on what response structure is
+        if 'choices' in response and response['choices']:
+            st.write(response['choices'][0]['text'])
+        else:
+            st.write(response['text'])
 
 if __name__ == "__main__":
     main()

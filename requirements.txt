@@ -1,8 +1,7 @@
 streamlit
-langchain-openai
-langchain
+openai
 PyPDF2
 numpy
-faiss-cpu
+requests
 sentence-transformers
-langchain-chat-openai
+langchain

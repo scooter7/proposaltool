@@ -5,7 +5,7 @@ import requests
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain_community.chat_models import ChatOpenAI, BaseMessage
+from langchain_community.chat_models import ChatOpenAI
 
 # Initialize the LangChain OpenAI Chat model with the API key from Streamlit secrets
 chat_model = ChatOpenAI(
@@ -77,24 +77,25 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
+        # Prepare messages as a list of dictionaries
         messages = [
-            BaseMessage(role="system", content="You are a helpful assistant."),
-            BaseMessage(role="user", content=f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}")
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
         ]
 
         try:
-            # Using `invoke` with structured messages
+            # Use invoke with messages directly
             response = chat_model.invoke(
-                input={"messages": messages},  # Pass structured input to invoke
+                input={"messages": messages},
                 max_tokens=1024
             )
 
             st.write("Generated Proposal:")
-            if isinstance(response, dict) and 'text' in response:
-                st.write(response['text'])
+            if isinstance(response, dict) and 'choices' in response and response['choices']:
+                st.write(response['choices'][0]['text'])
             else:
-                st.write("Check the structure of the response.")
-        
+                st.write(response['text'])
+
         except Exception as e:
             st.error(f"An unexpected error occurred: {str(e)}")
 

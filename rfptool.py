@@ -77,17 +77,19 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        # Corrected call to generate method
+        # Correct the input to the generate function
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
+        ]
+
         response = chat_model.generate(
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
-            ],
+            messages=messages,  # Correctly pass the messages
             max_tokens=1024
         )
 
         st.write("Generated Proposal:")
-        st.write(response['text'])  # Adjusted how the response is accessed
+        st.write(response['choices'][0]['text'])
 
 if __name__ == "__main__":
     main()

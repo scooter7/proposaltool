@@ -2,10 +2,10 @@ import streamlit as st
 import os
 import io
 import requests
-from PyPDF2 import PdfFileReader
+from PyPDF2 import PdfReader  # Updated import
 from sentence_transformers import SentenceTransformer
 import numpy as np
-from langchain_community.chat_models import ChatOpenAI  # Corrected import based on deprecation warning
+from langchain_community.chat_models import ChatOpenAI
 
 # Initialize the LangChain OpenAI Chat model with the API key from Streamlit secrets
 chat_model = ChatOpenAI(
@@ -33,8 +33,8 @@ class VectorStore:
 
 def read_pdf(file):
     """Read pages from a PDF file and return them as a list of strings."""
-    reader = PdfFileReader(file)
-    text = [reader.getPage(i).extract_text() for i in range(reader.numPages)]
+    reader = PdfReader(file)
+    text = [reader.getPage(i).extract_text() for i in range(len(reader.pages))]
     return text
 
 def download_github_files(base_url, local_dir='./rfps/'):

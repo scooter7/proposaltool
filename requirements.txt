@@ -5,5 +5,5 @@ PyPDF2
 numpy
 faiss-cpu
 sentence-transformers
-langchain.chat_openai
+langchain-chat-openai
 ChatOpenAI

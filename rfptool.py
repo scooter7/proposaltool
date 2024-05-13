@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import io
 import requests
-from PyPDF2 import PdfReader  # Updated import
+from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 import numpy as np
 from langchain_community.chat_models import ChatOpenAI
@@ -77,13 +77,17 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        # Using `generate` method to get the completion text
+        # Corrected call to generate method
         response = chat_model.generate(
-            prompt=f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
+            ],
             max_tokens=1024
         )
+
         st.write("Generated Proposal:")
-        st.write(response[0]['text'])  # Adjusting how the response is accessed based on typical structure
+        st.write(response['text'])  # Adjusted how the response is accessed
 
 if __name__ == "__main__":
     main()

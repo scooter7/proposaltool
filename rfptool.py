@@ -77,30 +77,35 @@ def main():
         st.write("Related content from past proposals:")
         st.write(query_results)
 
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
-        ]
-
-        # Adjusted to use `invoke` method if `generate` isn't appropriate
+        # Try using invoke method properly
         try:
-            response = chat_model.invoke(
-                messages=messages,
-                max_tokens=1024
-            )
-        except AttributeError:
-            # Fall back to generate if invoke isn't available
-            response = chat_model.generate(
-                messages=messages,
-                max_tokens=1024
-            )
+            # Construct input for invoke method
+            conversation = {
+                "model": "gpt-3.5-turbo-0125",  # Ensure this matches your model configuration
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": f"Generate a proposal based on: {requirements} and similar past proposal: {query_results}"}
+                ]
+            }
 
-        st.write("Generated Proposal:")
-        # Adjust how you access text based on what response structure is
-        if 'choices' in response and response['choices']:
-            st.write(response['choices'][0]['text'])
-        else:
-            st.write(response['text'])
+            # Adjusted to use `invoke` method
+            response = chat_model.invoke(
+                input=conversation,  # Passing the structured input to invoke
+                max_tokens=1024
+            )
+            
+            # Accessing the result text based on typical structure
+            if 'choices' in response and response['choices']:
+                st.write("Generated Proposal:")
+                st.write(response['choices'][0]['text'])
+            else:
+                st.write("Generated Proposal:")
+                st.write(response['text'])
+
+        except AttributeError as e:
+            st.error(f"Failed with AttributeError: {str(e)}")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {str(e)}")
 
 if __name__ == "__main__":
     main()
